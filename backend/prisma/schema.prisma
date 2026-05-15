@@ -1,0 +1,458 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  MANAGER
+  DRIVER
+  VIEWER
+}
+
+enum RateSession {
+  MORNING
+  EVENING
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  EMAIL
+  SMS
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum StaffRole {
+  DRIVER
+  HELPER
+}
+
+enum TripStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum PaymentMode {
+  CASH
+  CHEQUE
+  BANK_TRANSFER
+  ONLINE
+  GIFT
+  OTHER
+}
+
+enum PaymentDirection {
+  INCOMING
+  OUTGOING
+}
+
+enum SubscriptionPlan {
+  TRIAL
+  BASIC
+  STANDARD
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum ScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ScheduleType {
+  FARMER_INVOICE
+  RETAILER_INVOICE
+  COLLECTION_SUMMARY
+  DELIVERY_SUMMARY
+  BALANCE_REPORT
+  PROFIT_LOSS
+}
+
+// ─── Organization (Tenant) ────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  memberships       UserMembership[]
+  farmers           Farmer[]
+  retailers         Retailer[]
+  marketRates       MarketRate[]
+  collectionEntries CollectionEntry[]
+  deliveryEntries   DeliveryEntry[]
+  trips             Trip[]
+  tanks             Tank[]
+  farmerInvoices    FarmerInvoice[]
+  retailerInvoices  RetailerInvoice[]
+  staff             Staff[]
+  notifications     Notification[]
+  payments              Payment[]
+  subscriptions         Subscription[]
+  organizationSettings  OrganizationSettings?
+  notificationSchedules NotificationSchedule[]
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String?
+  googleId       String?      @unique
+  name           String
+  role           Role         @default(VIEWER)
+  isBlocked      Boolean      @default(false)
+  inviteToken    String?      @unique
+  allowedPages   String[]     @default([])
+  department     String?
+  position       String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  trips       Trip[]
+  memberships UserMembership[]
+}
+
+// ─── User Membership (multi-org) ──────────────────────────────────────────────
+
+model UserMembership {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           Role         @default(VIEWER)
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, organizationId])
+}
+
+// ─── Farmer ───────────────────────────────────────────────────────────────────
+
+model Farmer {
+  id                String       @id @default(cuid())
+  name              String
+  phone             String?
+  email             String?
+  address           String?
+  contractedMaunds  Decimal      @default(0)
+  fixedRatePerMaund Decimal      @default(0)
+  contractStart     DateTime?
+  contractEnd       DateTime?
+  isActive          Boolean      @default(true)
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  collectionEntries CollectionEntry[]
+  farmerInvoices    FarmerInvoice[]
+  payments          Payment[]
+  notifications     Notification[]
+}
+
+// ─── Retailer ─────────────────────────────────────────────────────────────────
+
+model Retailer {
+  id                String       @id @default(cuid())
+  name              String
+  phone             String?
+  email             String?
+  address           String?
+  committedMaunds   Decimal      @default(0)
+  fixedRatePerMaund Decimal      @default(0)
+  isActive          Boolean      @default(true)
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  deliveryEntries  DeliveryEntry[]
+  retailerInvoices RetailerInvoice[]
+  payments         Payment[]
+  notifications    Notification[]
+}
+
+// ─── Market Rate ──────────────────────────────────────────────────────────────
+
+model MarketRate {
+  id             String       @id @default(cuid())
+  date           DateTime     @db.Date
+  session        RateSession
+  ratePerMaund   Decimal
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@unique([date, session, organizationId])
+}
+
+// ─── Collection Entry ─────────────────────────────────────────────────────────
+
+model CollectionEntry {
+  id                String      @id @default(cuid())
+  date              DateTime    @db.Date
+  session           RateSession @default(MORNING)
+  farmerId          String
+  farmer            Farmer      @relation(fields: [farmerId], references: [id])
+  collectedMaunds   Decimal
+  qualityFatPercent Decimal?
+  qualityWaterAdded Boolean     @default(false)
+  qualityDensity    Decimal?
+  qualityPassed     Boolean     @default(true)
+  qualityNotes      String?
+  tripId            String?
+  trip              Trip?       @relation(fields: [tripId], references: [id])
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+// ─── Delivery Entry ───────────────────────────────────────────────────────────
+
+model DeliveryEntry {
+  id              String      @id @default(cuid())
+  date            DateTime    @db.Date
+  session         RateSession @default(MORNING)
+  retailerId      String
+  retailer        Retailer    @relation(fields: [retailerId], references: [id])
+  deliveredMaunds Decimal
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ─── Trip ─────────────────────────────────────────────────────────────────────
+
+model Trip {
+  id             String       @id @default(cuid())
+  date           DateTime     @db.Date
+  driverId       String
+  driver         User         @relation(fields: [driverId], references: [id])
+  startTime      DateTime?
+  endTime        DateTime?
+  status         TripStatus   @default(IN_PROGRESS)
+  stops          Json         @default("[]")
+  notes          String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  collectionEntries CollectionEntry[]
+}
+
+// ─── Tank ─────────────────────────────────────────────────────────────────────
+
+model Tank {
+  id             String       @id @default(cuid())
+  tankNumber     String
+  capacityLiters Decimal      @default(40)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([tankNumber, organizationId])
+}
+
+// ─── Farmer Invoice ───────────────────────────────────────────────────────────
+
+model FarmerInvoice {
+  id               String       @id @default(cuid())
+  farmerId         String
+  farmer           Farmer       @relation(fields: [farmerId], references: [id])
+  date             DateTime     @db.Date
+  contractedMaunds Decimal
+  suppliedMaunds   Decimal
+  fixedRate        Decimal
+  marketRate       Decimal
+  baseAmount       Decimal
+  shortfallPenalty Decimal      @default(0)
+  excessBonus      Decimal      @default(0)
+  netAmount        Decimal
+  isPaid           Boolean      @default(false)
+  paidAt           DateTime?
+  paymentMode      PaymentMode?
+  paymentReference String?
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+// ─── Retailer Invoice ─────────────────────────────────────────────────────────
+
+model RetailerInvoice {
+  id              String       @id @default(cuid())
+  retailerId      String
+  retailer        Retailer     @relation(fields: [retailerId], references: [id])
+  date            DateTime     @db.Date
+  committedMaunds Decimal
+  purchasedMaunds Decimal
+  fixedRate       Decimal
+  marketRate      Decimal
+  baseAmount      Decimal
+  excessSurcharge Decimal      @default(0)
+  netAmount       Decimal
+  isPaid          Boolean      @default(false)
+  paidAt          DateTime?
+  paymentMode     PaymentMode?
+  paymentReference String?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+// ─── Staff ────────────────────────────────────────────────────────────────────
+
+model Staff {
+  id             String       @id @default(cuid())
+  name           String
+  phone          String?
+  email          String?
+  nic            String?
+  photoUrl       String?
+  role           StaffRole
+  salary         Decimal
+  joinDate       DateTime?
+  isActive       Boolean      @default(true)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// ─── Notification ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id             String              @id @default(cuid())
+  farmerId       String?
+  farmer         Farmer?             @relation(fields: [farmerId], references: [id])
+  retailerId     String?
+  retailer       Retailer?           @relation(fields: [retailerId], references: [id])
+  channel        NotificationChannel
+  subject        String?
+  message        String
+  status         NotificationStatus  @default(PENDING)
+  sentAt         DateTime?
+  errorMessage   String?
+  isRead         Boolean             @default(false)
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime            @default(now())
+}
+
+// ─── Subscription ─────────────────────────────────────────────────────────────
+
+model Subscription {
+  id             String             @id @default(cuid())
+  plan           SubscriptionPlan   @default(TRIAL)
+  status         SubscriptionStatus @default(ACTIVE)
+  startDate      DateTime
+  endDate        DateTime
+  amountPaid     Decimal            @default(0)
+  features       Json               @default("{}")
+  notes          String?
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+// ─── Organization Settings (Branding) ────────────────────────────────────────
+
+model OrganizationSettings {
+  id              String       @id @default(cuid())
+  organizationId  String       @unique
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  brandName       String?
+  tagline         String?
+  logoUrl         String?
+  primaryColor    String?      @default("#2563eb")
+  accentColor     String?      @default("#16a34a")
+  invoiceHeader   String?
+  invoiceFooter   String?
+  signatureUrl    String?
+  signatureName   String?
+  signatureTitle  String?
+  address         String?
+  phone           String?
+  email           String?
+  website         String?
+  taxId           String?
+  bankName        String?
+  bankAccount     String?
+  bankIban        String?
+  updatedAt       DateTime     @updatedAt
+}
+
+// ─── Payment ──────────────────────────────────────────────────────────────────
+
+model Payment {
+  id             String           @id @default(cuid())
+  date           DateTime         @db.Date
+  amount         Decimal
+  paymentType    PaymentMode      @default(CASH)
+  direction      PaymentDirection
+  farmerId       String?
+  farmer         Farmer?          @relation(fields: [farmerId], references: [id])
+  retailerId     String?
+  retailer       Retailer?        @relation(fields: [retailerId], references: [id])
+  reference      String?
+  notes          String?
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+// ─── Notification Schedule ────────────────────────────────────────────────────
+
+model NotificationSchedule {
+  id             String            @id @default(cuid())
+  name           String
+  type           ScheduleType
+  frequency      ScheduleFrequency
+  dayOfWeek      Int?
+  dayOfMonth     Int?
+  hour           Int               @default(8)
+  minute         Int               @default(0)
+  channels       Json              @default("[]")
+  recipientType  String            @default("ALL")
+  specificIds    Json?
+  isActive       Boolean           @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
