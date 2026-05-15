@@ -9,6 +9,7 @@ import type { TranslationKey } from '@/lib/lang';
 import Sidebar from '@/components/sidebar';
 import AppSwitcher from '@/components/app-switcher';
 import { notificationsApi, farmersApi, retailersApi } from '@/lib/api';
+import { useClickOutside } from '@/lib/use-click-outside';
 import { SubscriptionProvider } from '@/lib/subscription-context';
 import { SubscriptionBanner } from '@/components/subscription-banner';
 
@@ -95,7 +96,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const load = () => notificationsApi.unreadCount()
-      .then((r) => { if (!cancelled) setUnreadCount(r.data?.count ?? 0); })
+      .then((r) => { if (!cancelled) setUnreadCount((prev) => { const n = r.data?.count ?? 0; return prev === n ? prev : n; }); })
       .catch(() => {});
     load();
     const id = setInterval(load, 60_000);
@@ -151,15 +152,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [loadSearchData]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setSearchOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  useClickOutside(searchRef, () => setSearchOpen(false));
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');

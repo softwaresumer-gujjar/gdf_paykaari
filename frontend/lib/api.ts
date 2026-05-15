@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
+  baseURL: BASE_URL,
   withCredentials: true,
 });
 
@@ -16,7 +18,7 @@ export const authApi = {
   me: () => api.get('/auth/me'),
   memberships: () => api.get('/auth/memberships'),
   switchOrg: (orgId: string) => api.post(`/auth/switch-org/${orgId}`),
-  googleAuthUrl: () => `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/auth/google`,
+  googleAuthUrl: () => `${BASE_URL}/auth/google`,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────

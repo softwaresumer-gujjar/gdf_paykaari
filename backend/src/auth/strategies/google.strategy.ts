@@ -39,6 +39,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
           data: { googleId: profile.id },
         });
       }
+      // Ensure membership exists for returning users (handles accounts created before multi-org)
+      await this.prisma.userMembership.upsert({
+        where: { userId_organizationId: { userId: user.id, organizationId: user.organizationId } },
+        create: { userId: user.id, organizationId: user.organizationId, role: user.role },
+        update: {},
+      });
     } else {
       const org = await this.prisma.organization.create({
         data: { name: `${profile.displayName}'s Business` },
@@ -56,13 +62,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         data: { userId: user.id, organizationId: org.id, role: Role.ADMIN },
       });
     }
-
-    // Ensure membership record exists
-    await this.prisma.userMembership.upsert({
-      where: { userId_organizationId: { userId: user.id, organizationId: user.organizationId } },
-      create: { userId: user.id, organizationId: user.organizationId, role: user.role },
-      update: {},
-    });
 
     done(null, user);
   }

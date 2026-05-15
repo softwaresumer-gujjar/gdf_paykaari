@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, type OrgMembership } from '@/lib/auth-context';
+import { useClickOutside } from '@/lib/use-click-outside';
 
 function WaffleIcon() {
   return (
@@ -48,13 +49,7 @@ export default function AppSwitcher() {
     if (open && memberships.length === 0) loadMemberships();
   }, [open, memberships.length, loadMemberships]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  useClickOutside(ref, () => setOpen(false));
 
   const handleSwitch = async (m: OrgMembership) => {
     if (m.isActive) { setOpen(false); return; }
@@ -69,7 +64,6 @@ export default function AppSwitcher() {
     }
   };
 
-  // Only render if multi-org or to show org info
   return (
     <div className="relative" ref={ref}>
       <button
